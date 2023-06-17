@@ -10,6 +10,12 @@ Clone the repository
 git clone https://github.com/DaniilSintsov/telemetr-parser.git telemetr-parser
 ```
 
+Go to the directory
+
+```bash
+cd telemetr-parser
+````
+
 Install dependencies
 
 ```bash
