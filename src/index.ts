@@ -1,71 +1,93 @@
-import puppeteer, { ElementHandle, NodeFor, Page } from 'puppeteer';
+import { Worker, isMainThread, parentPort, workerData } from 'worker_threads';
 import fs from 'node:fs';
 import 'dotenv/config';
-import { clearString } from './utils/removeControlCharacters.util.js';
+import { crawl } from './functions/crawl.function.js';
+import { ICrawled, ICrawledData, IWorkerData } from './types/parser.types.js';
+import { fileURLToPath } from 'url';
 
-async function getTextFromSelector(
-  page: Page,
-  selector: string
-): Promise<string> {
-  const $elem = await page.$(selector);
-  if (!$elem) {
-    throw new Error('No name found');
-  }
-  const text = await page.evaluate(elem => elem.textContent, $elem);
-  return clearString(text);
+const __filename = fileURLToPath(import.meta.url);
+
+const userAgent = process.env.USER_AGENT ?? null;
+const cookie = process.env.COOKIE ?? null;
+
+if (!userAgent || !cookie) {
+  throw new Error('Missing user agent or cookie');
 }
 
-async function fetchData() {
-  const browser = await puppeteer.launch({ headless: 'new' });
-  const page: Page = await browser.newPage();
-  await page.setExtraHTTPHeaders({
-    userAgent: process.env.USER_AGENT as string,
-    Cookie: process.env.COOKIE as string
-  });
+function getLinksFromTxt(file: string): string[] {
+  return fs.readFileSync(file, 'utf-8').toString().split('\n').filter(Boolean);
+}
 
-  await page.goto('https://telemetr.me/@isekaicryptoann');
+if (isMainThread) {
+  let activeWorkers = 0;
 
-  const name = await getTextFromSelector(page, '.kt-widget__username');
-  const description = await getTextFromSelector(page, '#rmjs-1');
-  const subscribers = await getTextFromSelector(
-    page,
-    'div.col-md-3:nth-child(1) > div:nth-child(1) > span:nth-child(3)'
+  if (!fs.existsSync('data.json')) {
+    fs.writeFileSync('data.json', '[]');
+  }
+
+  if (!fs.existsSync('crawledLinks.txt')) {
+    fs.writeFileSync('crawledLinks.txt', '');
+  }
+
+  const inputQueue: string[] = getLinksFromTxt('inputQueue.txt');
+  let inputQueueLength = inputQueue.length;
+  const crawledData: ICrawledData[] = JSON.parse(
+    fs.readFileSync('data.json', 'utf-8')
   );
+  const crawledLinks: string[] = getLinksFromTxt('crawledLinks.txt');
 
-  const $mentionsParent = await page.$('#who_mentioned > tbody:nth-child(2)');
-  const mentionsChildren: Array<ElementHandle<NodeFor<string>>> =
-    (await $mentionsParent?.$$(
-      '#who_mentioned > tbody:nth-child(2) > tr'
-    )) as Array<ElementHandle<NodeFor<string>>>;
+  let i = 0;
+  while (i < inputQueueLength) {
+    const url: string = inputQueue[i];
+    if (!crawledLinks.includes(url)) {
+      if (activeWorkers < 5) {
+        activeWorkers++;
 
-  const mentions = [];
-  const mentionsLinks = [];
+        const workerData: IWorkerData = {
+          url,
+          userAgent,
+          cookie
+        };
 
-  for (const child of mentionsChildren) {
-    await child.evaluate(elem => {
-      const $mentionName = elem.querySelector('.who_title');
-      // const mentionName = $mentionName.;
-      mentionsLinks.push($mentionName.href);
-      // mentions.push({ mentionName });
-    }, child);
-  }
+        const worker = new Worker(__filename, {
+          workerData
+        });
 
-  const data = {
-    name,
-    description,
-    subscribers: +subscribers.replace("'", ''),
-    mentions
-  };
-  const json = JSON.stringify(data, null, 2);
+        worker.on('message', (crawled: ICrawled) => {
+          if (!crawledLinks.includes(url)) {
+            crawledLinks.push(url);
+            fs.appendFileSync('crawledLinks.txt', url + '\n');
+          }
+          crawledData.push(crawled.data);
+          fs.writeFileSync('data.json', JSON.stringify(crawledData, null, 2));
+          const newLinks = crawled.links.filter(
+            link => !inputQueue.includes(link) && !crawledLinks.includes(link)
+          );
+          if (newLinks.length) {
+            inputQueue.push(...newLinks);
+            fs.appendFileSync('inputQueue.txt', newLinks.join('\n') + '\n');
+            inputQueueLength += newLinks.length;
+          }
+        });
 
-  fs.writeFile('data.json', json, 'utf8', err => {
-    if (err) {
-      throw err;
+        worker.on('error', e => {
+          console.error(e);
+        });
+
+        worker.on('exit', code => {
+          console.log(`${url} parsed with code ${code}`);
+          activeWorkers--;
+        });
+      } else {
+        i--;
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
     }
-    console.log('Data has been written to file');
+    i++;
+  }
+} else {
+  const { url, userAgent, cookie } = workerData;
+  crawl(url, userAgent, cookie).then((crawled: ICrawled) => {
+    parentPort?.postMessage(crawled);
   });
-
-  await browser.close();
 }
-
-fetchData();
