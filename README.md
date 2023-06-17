@@ -24,6 +24,13 @@ npm install
 
 Put the link to the first page in a file `inputQueue.txt`
 
+Create the `.env` file, put your cookie and user agent there
+
+```dotenv
+USER_AGENT=your_user_agent
+COOKIE=your_cookie
+```
+
 Run parser with command
 
 ```bash
