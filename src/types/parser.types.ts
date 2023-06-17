@@ -1,5 +1,6 @@
 export interface IMention {
   name: string;
+  when: string;
   subscribers: number;
   count: number;
 }
@@ -16,13 +17,7 @@ export interface ICrawled {
   data: ICrawledData;
 }
 
-export interface IWorkerData {
-  url: string;
-  userAgent: string;
-  cookie: string;
-}
-
-export interface IProcessdataArgs {
+export interface IProcessDataArgs {
   userAgent: string;
   cookie: string;
 }

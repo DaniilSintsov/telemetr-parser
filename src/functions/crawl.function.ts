@@ -27,7 +27,7 @@ export async function crawl(
   try {
     description = await page.$eval('#rmjs-1', e => e.textContent?.trim());
   } catch (e) {}
-  let subscribers: string;
+  let subscribers: string = '';
   try {
     subscribers = await page.$eval(
       'div.col-md-3:nth-child(1) > div:nth-child(1) > span:nth-child(3)',
@@ -55,15 +55,29 @@ export async function crawl(
         mentionsLinks.push(
           `${linkBase.protocol as string}//${linkBase.host}${mentionLink}`
         );
+
+        const mentionDate: string = await child.$eval('[data-day]', e =>
+          e.getAttribute('data-day')
+        );
+        const today: number = +new Date();
+        const otherDate: number = +new Date(mentionDate);
+        const diffMs: number = today - otherDate;
+        const mentionWhen: string = `${Math.round(
+          diffMs / 86400000
+        )} days back`;
+
         const mentionSubscribers: number = +(
           await child.$eval('.kt-number', e => e.textContent)
         ).replace("'", '');
+
         const mentionCount: number = +(await child.$eval(
           '.kt-number.kt-font-brand.text-underlined',
           e => e.textContent
         ));
+
         const mention: IMention = {
           name: mentionName,
+          when: mentionWhen,
           subscribers: mentionSubscribers,
           count: mentionCount
         };
@@ -75,7 +89,7 @@ export async function crawl(
   const data: ICrawledData = {
     name,
     description,
-    subscribers: +subscribers.replace("'", ''),
+    subscribers: subscribers ? +subscribers.replace("'", '') : 0,
     mentions
   };
   const crawled: ICrawled = {

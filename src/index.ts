@@ -4,11 +4,15 @@ import { crawl } from './functions/crawl.function.js';
 import {
   ICrawled,
   ICrawledData,
-  IProcessdataArgs
+  IProcessDataArgs
 } from './types/parser.types.js';
+import { isMainThread, Worker, workerData } from 'worker_threads';
+import url from 'node:url';
 
 const userAgent = process.env.USER_AGENT ?? null;
 const cookie = process.env.COOKIE ?? null;
+
+const __filename = url.fileURLToPath(import.meta.url);
 
 if (!userAgent || !cookie) {
   throw new Error('Missing user agent or cookie');
@@ -33,7 +37,7 @@ function writeToTxt(file: string, data: string[]) {
 async function processData({
   userAgent: userAgent,
   cookie: cookie
-}: IProcessdataArgs) {
+}: IProcessDataArgs) {
   while (getLinksFromTxt('inputQueue.txt').length) {
     const queue = getLinksFromTxt('inputQueue.txt');
     const currentUrl: string = queue.pop() as string;
@@ -70,4 +74,16 @@ async function processData({
   }
 }
 
-await processData({ userAgent, cookie });
+if (isMainThread) {
+  for (let i = 0; i < 5; i++) {
+    setTimeout(() => {
+      new Worker(__filename, {
+        workerData: { workerId: i, userAgent, cookie }
+      });
+    }, i * 2000);
+  }
+} else {
+  setTimeout(async () => {
+    await processData(workerData);
+  }, 2000);
+}
