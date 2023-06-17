@@ -22,24 +22,18 @@ export async function crawl(
   let name: string = '';
   try {
     name = await page.$eval('.kt-widget__username', e => e.textContent?.trim());
-  } catch (e) {
-    console.error(e);
-  }
+  } catch (e) {}
   let description: string = '';
   try {
     description = await page.$eval('#rmjs-1', e => e.textContent?.trim());
-  } catch (e) {
-    console.error(e);
-  }
-  let subscribers: string = '';
+  } catch (e) {}
+  let subscribers: string;
   try {
     subscribers = await page.$eval(
       'div.col-md-3:nth-child(1) > div:nth-child(1) > span:nth-child(3)',
       e => e.textContent?.trim()
     );
-  } catch (e) {
-    console.error(e);
-  }
+  } catch (e) {}
 
   const mentions: IMention[] = [];
   const mentionsLinks: string[] = [];
@@ -76,9 +70,7 @@ export async function crawl(
         mentions.push(mention);
       }
     }
-  } catch (e) {
-    console.error(e);
-  }
+  } catch (e) {}
 
   const data: ICrawledData = {
     name,

@@ -21,3 +21,8 @@ export interface IWorkerData {
   userAgent: string;
   cookie: string;
 }
+
+export interface IProcessdataArgs {
+  userAgent: string;
+  cookie: string;
+}
