@@ -1,28 +1,45 @@
 import { ICrawled, ICrawledData, IMention } from '../types/parser.types.js';
-import { Browser, Page } from 'puppeteer';
+import { BrowserContext, Page } from 'puppeteer';
 import url from 'node:url';
 
 interface ICrawlArgs {
   crawledUrl: string;
   userAgent: string;
   cookie: string;
-  getBrowserInstance: () => Promise<Browser>;
+  browserContext: BrowserContext;
+}
+
+type Cookie = {
+  name: string;
+  value: string;
+  domain?: string;
+  path?: string;
+  expires?: number;
+  httpOnly?: boolean;
+  secure?: boolean;
+  sameSite?: 'Strict' | 'Lax' | 'None';
+};
+
+function parseCookies(cookieString: string, domain: string): Cookie[] {
+  return cookieString.split('; ').map(cookie => {
+    const [name, value] = cookie.split('=');
+    return { name, value, domain };
+  });
 }
 
 export async function crawl({
   crawledUrl,
   userAgent,
   cookie,
-  getBrowserInstance
+  browserContext
 }: ICrawlArgs): Promise<ICrawled> {
   const linkBase = url.parse(crawledUrl, false);
 
-  const browser: Browser = await getBrowserInstance();
-  const page: Page = await browser.newPage();
-  await page.setExtraHTTPHeaders({
-    userAgent,
-    Cookie: cookie
-  });
+  const page: Page = await browserContext.newPage();
+  await page.setUserAgent(userAgent);
+  const cookies = parseCookies(cookie, linkBase.hostname as string);
+  await page.setCookie(...cookies);
+  await page.setDefaultNavigationTimeout(60000);
 
   await page.goto(crawledUrl, { waitUntil: 'networkidle2' });
 
@@ -44,6 +61,9 @@ export async function crawl({
 
   const mentions: IMention[] = [];
   const mentionsLinks: string[] = [];
+  await page.waitForSelector('#who_mentioned > tbody:nth-child(2) > tr', {
+    timeout: 60000
+  });
   try {
     const mentionsChildren = await page.$$(
       '#who_mentioned > tbody:nth-child(2) > tr'
@@ -99,7 +119,7 @@ export async function crawl({
     mentions
   };
 
-  await browser.close();
+  await page.close();
 
   return {
     links: mentionsLinks,

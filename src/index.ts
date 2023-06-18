@@ -18,9 +18,7 @@ if (!fs.existsSync(Files.INPUT_QUEUE)) {
   throw new Error('Missing inputQueue.txt file');
 }
 
-export async function getBrowserInstance(): Promise<Browser> {
-  return await puppeteer.launch({ headless: 'new' });
-}
+const browser: Browser = await puppeteer.launch({ headless: 'new' });
 
 const workerPromises: Promise<void>[] = [];
 for (let i = 0; i < WORKERS_COUNT; i++) {
@@ -30,7 +28,7 @@ for (let i = 0; i < WORKERS_COUNT; i++) {
         userAgent,
         cookie,
         workerId: i + 1,
-        getBrowserInstance
+        browserContext: browser.defaultBrowserContext()
       });
       resolve();
     }, i * WORKER_TIMEOUT);
@@ -40,6 +38,7 @@ for (let i = 0; i < WORKERS_COUNT; i++) {
 }
 await Promise.all(workerPromises);
 
-process.on('exit', () => {
+process.on('exit', async () => {
   console.log('All workers are done!');
+  await browser.close();
 });

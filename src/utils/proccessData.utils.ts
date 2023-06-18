@@ -1,5 +1,5 @@
 import { ICrawled, ICrawledData } from '../types/parser.types.js';
-import { Browser } from 'puppeteer';
+import { BrowserContext } from 'puppeteer';
 import { crawl } from './crawl.utils.js';
 import { parserState } from '../services/ParserState.service.js';
 
@@ -7,14 +7,14 @@ interface IProcessDataArgs {
   userAgent: string;
   cookie: string;
   workerId: number;
-  getBrowserInstance: () => Promise<Browser>;
+  browserContext: BrowserContext;
 }
 
 export async function processData({
   userAgent,
   cookie,
   workerId,
-  getBrowserInstance
+  browserContext
 }: IProcessDataArgs): Promise<void> {
   while (parserState.Queue.length) {
     const queue: string[] = parserState.Queue;
@@ -32,7 +32,7 @@ export async function processData({
           crawledUrl: currentUrl,
           userAgent,
           cookie,
-          getBrowserInstance
+          browserContext
         });
 
         data.push(crawled.data);
