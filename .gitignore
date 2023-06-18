@@ -4,3 +4,4 @@ build/
 .env
 data.json
 visitedLinks.txt
+inputQueue.txt

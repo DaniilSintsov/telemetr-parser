@@ -1,16 +1,23 @@
 import { ICrawled, ICrawledData, IMention } from '../types/parser.types.js';
-import puppeteer, { Page } from 'puppeteer';
+import { Browser, Page } from 'puppeteer';
 import url from 'node:url';
 
-export async function crawl(
-  crawledUrl: string,
-  userAgent: string,
-  cookie: string
-): Promise<ICrawled> {
+interface ICrawlArgs {
+  crawledUrl: string;
+  userAgent: string;
+  cookie: string;
+  getBrowserInstance: () => Promise<Browser>;
+}
+
+export async function crawl({
+  crawledUrl,
+  userAgent,
+  cookie,
+  getBrowserInstance
+}: ICrawlArgs): Promise<ICrawled> {
   const linkBase = url.parse(crawledUrl, false);
-  const browser = await puppeteer.launch({
-    headless: 'new'
-  });
+
+  const browser: Browser = await getBrowserInstance();
   const page: Page = await browser.newPage();
   await page.setExtraHTTPHeaders({
     userAgent,
@@ -37,7 +44,6 @@ export async function crawl(
 
   const mentions: IMention[] = [];
   const mentionsLinks: string[] = [];
-
   try {
     const mentionsChildren = await page.$$(
       '#who_mentioned > tbody:nth-child(2) > tr'
@@ -92,11 +98,11 @@ export async function crawl(
     subscribers: subscribers ? +subscribers.replace("'", '') : 0,
     mentions
   };
-  const crawled: ICrawled = {
+
+  await browser.close();
+
+  return {
     links: mentionsLinks,
     data
   };
-
-  await browser.close();
-  return crawled;
 }

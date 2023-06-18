@@ -17,7 +17,8 @@ export interface ICrawled {
   data: ICrawledData;
 }
 
-export interface IProcessDataArgs {
-  userAgent: string;
-  cookie: string;
+export interface IParserState {
+  visited: string[];
+  data: ICrawledData[];
+  queue: string[];
 }

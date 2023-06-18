@@ -1,89 +1,61 @@
 import fs from 'node:fs';
 import 'dotenv/config';
-import { crawl } from './functions/crawl.function.js';
-import {
-  ICrawled,
-  ICrawledData,
-  IProcessDataArgs
-} from './types/parser.types.js';
-import { isMainThread, Worker, workerData } from 'worker_threads';
-import url from 'node:url';
+import { IParserState } from './types/parser.types.js';
+import puppeteer, { Browser } from 'puppeteer';
+import { getLinksFromTxt } from './utils/file.utils.js';
+import { processData } from './utils/proccessData.utils.js';
+import { Files } from './types/file.types.js';
+
+const WORKERS_COUNT: number = 5;
+const WORKER_TIMEOUT: number = 9000; // The best tested value
 
 const userAgent = process.env.USER_AGENT ?? null;
 const cookie = process.env.COOKIE ?? null;
-
-const __filename = url.fileURLToPath(import.meta.url);
 
 if (!userAgent || !cookie) {
   throw new Error('Missing user agent or cookie');
 }
 
-if (!fs.existsSync('data.json')) {
-  fs.writeFileSync('data.json', '[]');
+if (!fs.existsSync(Files.INPUT_QUEUE)) {
+  throw new Error('Missing inputQueue.txt file');
 }
 
-if (!fs.existsSync('visitedLinks.txt')) {
-  fs.writeFileSync('visitedLinks.txt', '');
+if (!fs.existsSync(Files.DATA)) {
+  fs.writeFileSync(Files.DATA, '[]');
 }
 
-function getLinksFromTxt(file: string): string[] {
-  return fs.readFileSync(file, 'utf-8').toString().split('\n').filter(Boolean);
+if (!fs.existsSync(Files.VISITED_LINKS)) {
+  fs.writeFileSync(Files.VISITED_LINKS, '');
 }
 
-function writeToTxt(file: string, data: string[]) {
-  fs.writeFileSync(file, data.join('\n') + '\n');
+export async function getBrowserInstance(): Promise<Browser> {
+  return await puppeteer.launch({ headless: 'new' });
 }
 
-async function processData({
-  userAgent: userAgent,
-  cookie: cookie
-}: IProcessDataArgs) {
-  while (getLinksFromTxt('inputQueue.txt').length) {
-    const queue = getLinksFromTxt('inputQueue.txt');
-    const currentUrl: string = queue.pop() as string;
+export const parserState: IParserState = {
+  visited: getLinksFromTxt(Files.VISITED_LINKS) ?? [],
+  data: JSON.parse(fs.readFileSync(Files.DATA, 'utf-8')) ?? [],
+  queue: getLinksFromTxt(Files.INPUT_QUEUE)
+};
 
-    const visited: string[] = getLinksFromTxt('visitedLinks.txt') ?? [];
-    const data: ICrawledData[] =
-      JSON.parse(fs.readFileSync('data.json', 'utf-8')) ?? [];
-
-    if (!visited.includes(currentUrl)) {
-      visited.push(currentUrl);
-
-      let crawled: ICrawled;
-      try {
-        crawled = await crawl(currentUrl, userAgent, cookie);
-        data.push(crawled.data);
-      } catch (e) {
-        console.error(e);
-        writeToTxt('inputQueue.txt', queue);
-        writeToTxt('visitedLinks.txt', visited);
-        continue;
-      }
-
-      for (const link of crawled.links) {
-        if (!visited.includes(link)) {
-          queue.push(link);
-        }
-      }
-    }
-    writeToTxt('inputQueue.txt', queue);
-    writeToTxt('visitedLinks.txt', visited);
-    fs.writeFileSync('data.json', JSON.stringify(data, null, 2));
-
-    console.log(`${currentUrl} is crawled`);
-  }
-}
-
-if (isMainThread) {
-  for (let i = 0; i < 5; i++) {
-    setTimeout(() => {
-      new Worker(__filename, {
-        workerData: { workerId: i, userAgent, cookie }
+const workerPromises: Promise<void>[] = [];
+for (let i = 0; i < WORKERS_COUNT; i++) {
+  const promise: Promise<void> = new Promise(resolve => {
+    setTimeout(async () => {
+      await processData({
+        userAgent,
+        cookie,
+        workerId: i + 1,
+        getBrowserInstance
       });
-    }, i * 2000);
-  }
-} else {
-  setTimeout(async () => {
-    await processData(workerData);
-  }, 2000);
+      resolve();
+    }, i * WORKER_TIMEOUT);
+  });
+
+  workerPromises.push(promise);
 }
+await Promise.all(workerPromises);
+
+process.on('exit', () => {
+  console.log('All workers are done!');
+});
