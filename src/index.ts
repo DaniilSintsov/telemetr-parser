@@ -1,8 +1,6 @@
 import fs from 'node:fs';
 import 'dotenv/config';
-import { IParserState } from './types/parser.types.js';
 import puppeteer, { Browser } from 'puppeteer';
-import { getLinksFromTxt } from './utils/file.utils.js';
 import { processData } from './utils/proccessData.utils.js';
 import { Files } from './types/file.types.js';
 
@@ -20,23 +18,9 @@ if (!fs.existsSync(Files.INPUT_QUEUE)) {
   throw new Error('Missing inputQueue.txt file');
 }
 
-if (!fs.existsSync(Files.DATA)) {
-  fs.writeFileSync(Files.DATA, '[]');
-}
-
-if (!fs.existsSync(Files.VISITED_LINKS)) {
-  fs.writeFileSync(Files.VISITED_LINKS, '');
-}
-
 export async function getBrowserInstance(): Promise<Browser> {
   return await puppeteer.launch({ headless: 'new' });
 }
-
-export const parserState: IParserState = {
-  visited: getLinksFromTxt(Files.VISITED_LINKS) ?? [],
-  data: JSON.parse(fs.readFileSync(Files.DATA, 'utf-8')) ?? [],
-  queue: getLinksFromTxt(Files.INPUT_QUEUE)
-};
 
 const workerPromises: Promise<void>[] = [];
 for (let i = 0; i < WORKERS_COUNT; i++) {

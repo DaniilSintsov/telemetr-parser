@@ -1,10 +1,7 @@
-import { ICrawled } from '../types/parser.types.js';
+import { ICrawled, ICrawledData } from '../types/parser.types.js';
 import { Browser } from 'puppeteer';
 import { crawl } from './crawl.utils.js';
-import { parserState } from '../index.js';
-import { writeToTxt } from './file.utils.js';
-import { Files } from '../types/file.types.js';
-import fs from 'node:fs';
+import { parserState } from '../services/ParserState.service.js';
 
 interface IProcessDataArgs {
   userAgent: string;
@@ -19,11 +16,15 @@ export async function processData({
   workerId,
   getBrowserInstance
 }: IProcessDataArgs): Promise<void> {
-  while (parserState.queue.length) {
-    const currentUrl: string = parserState.queue.pop() as string;
+  while (parserState.Queue.length) {
+    const queue: string[] = parserState.Queue;
+    const visited: string[] = parserState.Visited;
+    const data: ICrawledData[] = parserState.Data;
 
-    if (!parserState.visited.includes(currentUrl)) {
-      parserState.visited.push(currentUrl);
+    const currentUrl: string = queue.pop() as string;
+
+    if (!visited.includes(currentUrl)) {
+      visited.push(currentUrl);
 
       let crawled: ICrawled;
       try {
@@ -33,26 +34,24 @@ export async function processData({
           cookie,
           getBrowserInstance
         });
-        parserState.data.push(crawled.data);
+
+        data.push(crawled.data);
 
         for (const link of crawled.links) {
-          if (
-            !parserState.visited.includes(link) &&
-            !parserState.queue.includes(link)
-          ) {
-            parserState.queue.push(link);
+          if (!visited.includes(link) && !queue.includes(link)) {
+            queue.push(link);
           }
         }
 
-        writeToTxt(Files.VISITED_LINKS, parserState.visited);
-        writeToTxt(Files.INPUT_QUEUE, parserState.queue);
-        fs.writeFileSync(Files.DATA, JSON.stringify(parserState.data, null, 2));
+        parserState.setQueue(queue);
+        parserState.setVisited(visited);
+        parserState.setData(data);
       } catch (e) {
         console.error(
           `Worker ${workerId} processed ${currentUrl} with error:\n${e}`
         );
-        writeToTxt(Files.VISITED_LINKS, parserState.visited);
-        writeToTxt(Files.INPUT_QUEUE, parserState.queue);
+        parserState.setQueue(queue);
+        parserState.setVisited(visited);
         continue;
       }
     }
