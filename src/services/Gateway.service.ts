@@ -1,44 +1,82 @@
 import { Files } from '../types/file.types.js';
-import fs from 'node:fs';
+import fs from 'node:fs/promises';
+import fsSync from 'node:fs';
 
 interface IGateway {
-  getDataArrFromTxt: (file: Files) => string[];
+  getDataArrFromTxt: (file: Files) => Promise<string[]>;
+  appendDataToTxt: (file: Files, data: string) => void;
   writeDataArrToTxt: (file: Files, data: string[]) => void;
-  writeDataToJson: (file: Files, data: any) => void;
-  getDataFromJson: (file: Files) => any;
+  getDataFromJson: (file: Files) => Promise<any[]>;
+  writeDataToJson: (file: Files | string, data: any) => void;
 }
 
 export class Gateway implements IGateway {
-  getDataArrFromTxt(file: Files): string[] {
-    if (!fs.existsSync(file)) {
-      fs.writeFileSync(file, '');
+  async getDataArrFromTxt(file: Files): Promise<string[]> {
+    if (!fsSync.existsSync(file)) {
+      try {
+        await fs.writeFile(file, '');
+      } catch (e) {
+        console.error(e);
+      }
     }
 
-    return (
-      fs.readFileSync(file, 'utf-8').toString().split('\n').filter(Boolean) ||
-      []
-    );
+    try {
+      return (
+        (await fs.readFile(file, 'utf-8'))
+          .toString()
+          .split('\n')
+          .filter(Boolean) || []
+      );
+    } catch (e) {
+      console.error(e);
+      return [];
+    }
   }
 
-  writeDataArrToTxt(file: Files, data: string[]): void {
-    fs.writeFileSync(file, data.join('\n') + '\n');
+  async appendDataToTxt(file: Files, data: string): Promise<void> {
+    try {
+      await fs.appendFile(file, data + '\n');
+    } catch (e) {
+      console.error(e);
+    }
   }
 
-  writeDataToJson(file: Files, data: any): void {
-    fs.writeFileSync(file, JSON.stringify(data, null, 2));
+  async writeDataArrToTxt(file: Files, data: string[]): Promise<void> {
+    try {
+      await fs.writeFile(file, data.join('\n') + '\n');
+    } catch (e) {
+      console.error(e);
+    }
   }
 
-  getDataFromJson(file: Files): any {
-    if (!fs.existsSync(file)) {
-      fs.writeFileSync(file, '');
+  async getDataFromJson(file: Files): Promise<any[]> {
+    if (!fsSync.existsSync(file)) {
+      try {
+        await fs.writeFile(file, '');
+      } catch (e) {
+        console.error(e);
+      }
     }
 
-    const json = fs.readFileSync(file, 'utf-8').trim();
+    try {
+      const json = Array.from(JSON.parse(await fs.readFile(file, 'utf-8')));
 
-    if (json.length) {
-      return JSON.parse(json);
+      if (json.length) {
+        return json;
+      }
+
+      return [];
+    } catch (e) {
+      console.error(e);
+      return [];
     }
+  }
 
-    return '';
+  async writeDataToJson(file: Files | string, data: any): Promise<void> {
+    try {
+      await fs.writeFile(file, JSON.stringify(data, null, 2));
+    } catch (e) {
+      console.error(e);
+    }
   }
 }

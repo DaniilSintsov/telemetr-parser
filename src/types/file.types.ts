@@ -3,3 +3,7 @@ export enum Files {
   VISITED_LINKS = 'visitedLinks.txt',
   DATA = 'data.json'
 }
+
+export enum Dirs {
+  RESULT = 'result'
+}

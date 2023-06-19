@@ -1,50 +1,77 @@
-import { ICrawledData } from '../types/parser.types.js';
-import { Files } from '../types/file.types.js';
+import { ICrawled, ICrawledData } from '../types/parser.types.js';
+import { Dirs, Files } from '../types/file.types.js';
 import { Gateway } from './Gateway.service.js';
+import path from 'node:path';
+
+type visitFromQueueCallback = (current: string) => void;
 
 interface IParserState {
-  setQueue(queue: string[]): void;
-  setVisited(visited: string[]): void;
-  setData(data: ICrawledData[]): void;
+  visitFromQueue: (callback: visitFromQueueCallback) => void;
+  appendQueueToFile: (elem: string) => void;
+  appendVisitedToFile: (visited: string) => void;
+  saveDataToFile: (data: ICrawledData) => void;
 }
 
-class ParserState implements IParserState {
+interface IInitialState {
+  visited: string[];
+  queue: string[];
+}
+
+export class ParserState implements IParserState {
   private readonly gateway: Gateway;
-  private visited: string[];
-  private data: ICrawledData[];
-  private queue: string[];
+  private readonly visited: string[];
+  private readonly queue: string[];
 
-  constructor(gateway: Gateway) {
+  constructor(gateway: Gateway, { visited, queue }: IInitialState) {
     this.gateway = gateway;
-    this.visited = this.gateway.getDataArrFromTxt(Files.VISITED_LINKS);
-    this.data = this.gateway.getDataFromJson(Files.DATA) || [];
-    this.queue = this.gateway.getDataArrFromTxt(Files.INPUT_QUEUE);
-  }
-
-  public get Queue(): string[] {
-    return this.queue;
-  }
-  public get Visited(): string[] {
-    return this.visited;
-  }
-  public get Data(): ICrawledData[] {
-    return this.data;
-  }
-
-  public setQueue(queue: string[]): void {
-    this.queue = queue;
-    this.gateway.writeDataArrToTxt(Files.INPUT_QUEUE, this.queue);
-  }
-
-  public setVisited(visited: string[]): void {
     this.visited = visited;
-    this.gateway.writeDataArrToTxt(Files.VISITED_LINKS, this.visited);
+    this.queue = queue;
   }
 
-  public setData(data: ICrawledData[]): void {
-    this.data = data;
-    this.gateway.writeDataToJson(Files.DATA, this.data);
+  get FilteredQueueLength(): number {
+    return this.filterQueue().length;
+  }
+
+  private filterQueue(): string[] {
+    return this.queue.filter(link => !this.visited.includes(link));
+  }
+
+  private getUniqueResultFilename(): string {
+    const timestamp = Date.now();
+    const randomNum = Math.floor(Math.random() * 1000);
+    return `${timestamp}_${randomNum}.json`;
+  }
+
+  async appendQueueToFile(elem: string): Promise<void> {
+    await this.gateway.appendDataToTxt(Files.INPUT_QUEUE, elem);
+  }
+
+  async appendVisitedToFile(visited: string): Promise<void> {
+    await this.gateway.appendDataToTxt(Files.VISITED_LINKS, visited);
+  }
+
+  async saveDataToFile(data: ICrawledData): Promise<void> {
+    const fileName = this.getUniqueResultFilename();
+    await this.gateway.writeDataToJson(path.join(Dirs.RESULT, fileName), data);
+  }
+
+  async visitFromQueue(callback: visitFromQueueCallback): Promise<void> {
+    const filteredQueue = this.filterQueue();
+    const current: string = filteredQueue[filteredQueue.length - 1];
+    if (current && !this.visited.includes(current)) {
+      this.visited.push(current);
+      await this.appendVisitedToFile(current);
+      await callback(current);
+    }
+  }
+
+  async processCrawled(crawled: ICrawled) {
+    await this.saveDataToFile(crawled.data);
+    for (const link of crawled.links) {
+      if (!this.visited.includes(link) && !this.queue.includes(link)) {
+        this.queue.push(link);
+        await this.appendQueueToFile(link);
+      }
+    }
   }
 }
-
-export const parserState = new ParserState(new Gateway());

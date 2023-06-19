@@ -40,6 +40,7 @@ export async function crawl({
   const cookies = parseCookies(cookie, linkBase.hostname as string);
   await page.setCookie(...cookies);
   await page.setDefaultNavigationTimeout(60000);
+  await page.setDefaultTimeout(60000);
 
   await page.goto(crawledUrl, { waitUntil: 'networkidle2' });
 
@@ -61,9 +62,7 @@ export async function crawl({
 
   const mentions: IMention[] = [];
   const mentionsLinks: string[] = [];
-  await page.waitForSelector('#who_mentioned > tbody:nth-child(2) > tr', {
-    timeout: 60000
-  });
+
   try {
     const mentionsChildren = await page.$$(
       '#who_mentioned > tbody:nth-child(2) > tr'
