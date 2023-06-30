@@ -19,22 +19,25 @@ export async function processData({
   parserState
 }: IProcessDataArgs): Promise<void> {
   while (parserState.FilteredQueueLength) {
-    await parserState.visitFromQueue(async (currentUrl: string) => {
-      let crawled: ICrawled;
-      try {
-        crawled = await crawl({
-          crawledUrl: currentUrl,
-          userAgent,
-          cookie,
-          browserContext
-        });
-        await parserState.processCrawled(crawled);
-        console.log(`Worker ${workerId}: ${currentUrl} is crawled`);
-      } catch (e) {
-        console.error(
-          `Worker ${workerId} processed ${currentUrl} with error:\n${e}`
-        );
-      }
-    });
+    const currentUrl: string | undefined = await parserState.visitFromQueue();
+
+    if (!currentUrl) {
+      continue;
+    }
+
+    try {
+      const crawled: ICrawled = await crawl({
+        crawledUrl: currentUrl,
+        userAgent,
+        cookie,
+        browserContext
+      });
+      await parserState.processCrawled(crawled);
+      console.log(`Worker ${workerId}: ${currentUrl} is crawled`);
+    } catch (e) {
+      console.error(
+        `Worker ${workerId} processed ${currentUrl} with error:\n${e}`
+      );
+    }
   }
 }

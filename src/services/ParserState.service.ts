@@ -6,7 +6,9 @@ import path from 'node:path';
 type visitFromQueueCallback = (current: string) => void;
 
 interface IParserState {
-  visitFromQueue: (callback: visitFromQueueCallback) => void;
+  visitFromQueue: (
+    callback: visitFromQueueCallback
+  ) => Promise<string | undefined>;
   appendQueueToFile: (elem: string) => void;
   appendVisitedToFile: (visited: string) => void;
   saveDataToFile: (data: ICrawledData) => void;
@@ -55,14 +57,15 @@ export class ParserState implements IParserState {
     await this.gateway.writeDataToJson(path.join(Dirs.RESULT, fileName), data);
   }
 
-  async visitFromQueue(callback: visitFromQueueCallback): Promise<void> {
+  async visitFromQueue(): Promise<string | undefined> {
     const filteredQueue = this.filterQueue();
     const current: string = filteredQueue[filteredQueue.length - 1];
     if (current && !this.visited.includes(current)) {
       this.visited.push(current);
       await this.appendVisitedToFile(current);
-      await callback(current);
+      return current;
     }
+    return;
   }
 
   async processCrawled(crawled: ICrawled) {
